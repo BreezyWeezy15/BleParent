@@ -3,6 +3,7 @@ package com.app.lockcompose
 import ShowAppList
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -10,20 +11,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.app.lockcompose.ui.theme.LockComposeTheme
 
-
 class MainActivity : ComponentActivity() {
 
-    // Register permission request handlers
+    // Register permission request handlers for each permission
     private val cameraPermissionRequest =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
             if (isGranted) {
@@ -51,10 +46,28 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    private val bluetoothConnectPermissionRequest =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                Toast.makeText(this, "Bluetooth Connect permission granted", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Bluetooth Connect permission denied", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    private val bluetoothScanPermissionRequest =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                Toast.makeText(this, "Bluetooth Scan permission granted", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Bluetooth Scan permission denied", Toast.LENGTH_SHORT).show()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Check and request permissions at runtime
+        // Check and request necessary permissions at runtime
         checkAndRequestPermissions()
 
         setContent {
@@ -85,6 +98,20 @@ class MainActivity : ComponentActivity() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH)
             != PackageManager.PERMISSION_GRANTED) {
             bluetoothPermissionRequest.launch(Manifest.permission.BLUETOOTH)
+        }
+
+        // Check and request Bluetooth Connect permission (Android 12 and above)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
+            != PackageManager.PERMISSION_GRANTED) {
+            bluetoothConnectPermissionRequest.launch(Manifest.permission.BLUETOOTH_CONNECT)
+        }
+
+        // Check and request Bluetooth Scan permission (Android 12 and above)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN)
+            != PackageManager.PERMISSION_GRANTED) {
+            bluetoothScanPermissionRequest.launch(Manifest.permission.BLUETOOTH_SCAN)
         }
     }
 }

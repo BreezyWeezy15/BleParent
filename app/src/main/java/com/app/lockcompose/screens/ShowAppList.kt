@@ -145,7 +145,14 @@ fun ShowAppList() {
         ) {
             // QR Scanner Button
             Button(
-                onClick = { startQRScanner() },
+                onClick = {
+                    if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) {
+                        // Bluetooth is not enabled, prompt user to enable it
+                        val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                        (context as Activity).startActivityForResult(enableBtIntent, 1)
+                    } else {
+                        startQRScanner()
+                    } },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 16.dp),
