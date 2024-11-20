@@ -1,8 +1,11 @@
+
+
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.AdaptiveIconDrawable
@@ -10,22 +13,14 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.util.Base64
 import android.widget.Toast
-import android.widget.Toast.*
+import android.widget.Toast.LENGTH_SHORT
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,49 +28,23 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
-import com.app.lockcompose.R
 import com.google.firebase.database.FirebaseDatabase
 import com.google.zxing.integration.android.IntentIntegrator
-import com.google.zxing.integration.android.IntentResult
 import java.io.ByteArrayOutputStream
 import java.util.Locale
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,6 +62,14 @@ fun ShowAppList() {
 
     var pinCode by remember { mutableStateOf("") }
 
+    // Bluetooth variables
+    val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+    var pairedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
+
+    // QR Code scan result
+    var qrData by remember { mutableStateOf("") }
+
+    // Function to parse interval (convert to minutes)
     fun parseInterval(interval: String): Int {
         return interval.replace(" min", "").toIntOrNull() ?: 0
     }
@@ -102,10 +79,35 @@ fun ShowAppList() {
         val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("Apps")
         firebaseDatabase.removeValue().addOnCompleteListener { task ->
             if (task.isSuccessful) {
-                makeText(context, "All apps deleted", LENGTH_SHORT).show()
+                Toast.makeText(context, "All apps deleted", LENGTH_SHORT).show()
             } else {
-                makeText(context, "Failed to delete apps", LENGTH_SHORT).show()
+                Toast.makeText(context, "Failed to delete apps", LENGTH_SHORT).show()
             }
+        }
+    }
+
+    // Function to scan QR code
+    fun startQRScanner() {
+        val qrScanner = IntentIntegrator(context as Activity)
+        qrScanner.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
+        qrScanner.setPrompt("Scan QR Code")
+        qrScanner.initiateScan()
+    }
+
+    // Function to handle Bluetooth pairing (based on QR code)
+    @SuppressLint("MissingPermission")
+    fun startBluetoothDiscovery(qrData: String) {
+        val deviceAddress = qrData // Assuming QR data contains device MAC address
+        val device = bluetoothAdapter?.getRemoteDevice(deviceAddress)
+        pairedDevice = device
+        bluetoothAdapter?.cancelDiscovery()
+        bluetoothAdapter?.startDiscovery()
+
+        // Connect to the Bluetooth device (if paired)
+        if (pairedDevice != null) {
+            Toast.makeText(context, "Attempting to connect to ${pairedDevice?.name}", LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(context, "Device not found", LENGTH_SHORT).show()
         }
     }
 
@@ -116,7 +118,7 @@ fun ShowAppList() {
                 actions = {
                     IconButton(onClick = {
                         if (availableApps.isEmpty()) {
-                            makeText(context, "No apps to delete", LENGTH_SHORT).show()
+                          //  makeText(context, "No apps to delete", LENGTH_SHORT).show()
                         } else {
                             deleteAllAppsFromFirebase()
                             availableApps.clear()  // Clear the list locally
@@ -141,6 +143,17 @@ fun ShowAppList() {
                 .padding(paddingValues)
                 .padding(16.dp)
         ) {
+            // QR Scanner Button
+            Button(
+                onClick = { startQRScanner() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3F51B5)) // Indigo color
+            ) {
+                Text("Scan QR Code", color = Color.White)
+            }
+
             // Spinner for time interval - Full width
             ExposedDropdownMenuBox(
                 expanded = expanded,
@@ -226,14 +239,14 @@ fun ShowAppList() {
                 )
             )
 
-            // Button at the bottom
+            // Send Button at the bottom
             Button(
                 onClick = {
                     if (pinCode.isNotEmpty() && selectedApps.isNotEmpty() && selectedInterval != "Select Interval") {
                         val intervalInMinutes = parseInterval(selectedInterval)
                         sendSelectedAppsToFirebase(selectedApps, intervalInMinutes, pinCode, context)
                     } else {
-                        makeText(context, "Please fill all required fields", LENGTH_SHORT).show()
+                        Toast.makeText(context, "Please fill all required fields", LENGTH_SHORT).show()
                     }
                 },
                 modifier = Modifier
@@ -251,108 +264,79 @@ fun ShowAppList() {
     }
 }
 
-@SuppressLint("NewApi")
-fun drawableToByteArray(drawable: Drawable): ByteArray {
-    val bitmap = when (drawable) {
-        is BitmapDrawable -> drawable.bitmap
-        is AdaptiveIconDrawable -> {
-            val bitmap = Bitmap.createBitmap(
-                drawable.intrinsicWidth,
-                drawable.intrinsicHeight,
-                Bitmap.Config.ARGB_8888
-            )
-            val canvas = Canvas(bitmap)
-            drawable.setBounds(0, 0, canvas.width, canvas.height)
-            drawable.draw(canvas)
-            bitmap
-        }
-        else -> throw IllegalArgumentException("Unsupported drawable type")
-    }
-
-    val stream = ByteArrayOutputStream()
-    bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
-    return stream.toByteArray()
-}
-
-data class InstalledApp(
-    val packageName: String,
-    val name: String,
-    val icon: Drawable?
-)
-
-fun getInstalledApps(context: Context): List<InstalledApp> {
-    val packageManager = context.packageManager
-    val appsList = mutableListOf<InstalledApp>()
-    val installedApps = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN, null), 0)
-
-    installedApps.forEach { resolveInfo ->
-        val appName = resolveInfo.loadLabel(packageManager).toString()
-        val appIcon = resolveInfo.loadIcon(packageManager)
-        appsList.add(InstalledApp(resolveInfo.activityInfo.packageName, appName, appIcon))
-    }
-
-    return appsList
-}
-
-fun sendSelectedAppsToFirebase(selectedApps: List<InstalledApp>, intervalInMinutes: Int, pinCode: String, context: Context) {
-    val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("SelectedApps")
-    val appsData = selectedApps.map { app ->
+fun sendSelectedAppsToFirebase(
+    selectedApps: List<InstalledApp>,
+    intervalInMinutes: Int,
+    pinCode: String,
+    context: Context
+) {
+    val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("UserApps")
+    val userAppData = selectedApps.map { app ->
         mapOf(
-            "package" to app.packageName,
-            "name" to app.name,
-            "interval" to intervalInMinutes,
+            "packageName" to app.packageName,
+            "appName" to app.appName,
+            "intervalInMinutes" to intervalInMinutes,
             "pinCode" to pinCode
         )
     }
-    firebaseDatabase.push().setValue(appsData).addOnCompleteListener {
-        if (it.isSuccessful) {
-            makeText(context, "Data sent successfully", LENGTH_SHORT).show()
+
+    firebaseDatabase.push().setValue(userAppData).addOnCompleteListener { task ->
+        if (task.isSuccessful) {
+            Toast.makeText(context, "Apps sent successfully", LENGTH_SHORT).show()
         } else {
-            makeText(context, "Failed to send data", LENGTH_SHORT).show()
+            Toast.makeText(context, "Failed to send apps", LENGTH_SHORT).show()
         }
     }
 }
 
+
+fun getInstalledApps(context: Context): List<InstalledApp> {
+    val packageManager = context.packageManager
+    val installedPackages = packageManager.getInstalledApplications(0)
+    return installedPackages.map {
+        InstalledApp(
+            appName = it.loadLabel(packageManager).toString(),
+            packageName = it.packageName,
+            icon = it.loadIcon(packageManager)
+        )
+    }
+}
+
+data class InstalledApp(val appName: String, val packageName: String, val icon: Drawable)
+
 @Composable
-fun AppListItem(
-    app: InstalledApp,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
+fun AppListItem(app: InstalledApp, isSelected: Boolean, onClick: () -> Unit) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) Color(0xFFE0E0E0) else Color.Transparent
-        ),
-        shape = RoundedCornerShape(8.dp)
+            .padding(8.dp)
+            .clickable { onClick() }
+            .background(if (isSelected) Color(0xFFE1F5FE) else Color.Transparent),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
+        Image(
+            painter = rememberDrawablePainter(app.icon),
+            contentDescription = "App Icon",
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            val iconPainter: Painter = if (app.icon != null) {
-                BitmapPainter((app.icon as BitmapDrawable).bitmap.asImageBitmap())
-            } else {
-                painterResource(id = R.drawable.ic_launcher_foreground)
-            }
-            Image(
-                painter = iconPainter,
-                contentDescription = null,
-                modifier = Modifier.size(40.dp)
-            )
+                .size(40.dp)
+                .padding(end = 16.dp)
+        )
 
-            Spacer(modifier = Modifier.width(16.dp))
+        Text(app.appName, style = MaterialTheme.typography.bodyMedium)
+    }
+}
 
-            Text(
-                text = app.name,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (isSelected) Color.Black else Color.Gray,
-                modifier = Modifier.weight(1f)
-            )
+fun rememberDrawablePainter(drawable: Drawable): Painter {
+    val bitmap = if (drawable is BitmapDrawable) {
+        drawable.bitmap
+    } else {
+        val width = drawable.intrinsicWidth
+        val height = drawable.intrinsicHeight
+        Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+            val canvas = Canvas(this)
+            drawable.setBounds(0, 0, canvas.width, canvas.height)
+            drawable.draw(canvas)
         }
     }
+    return BitmapPainter(bitmap.asImageBitmap())
 }
