@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.app.lockcompose.screens.DevicesScreen
 import com.app.lockcompose.ui.theme.LockComposeTheme
 
 class MainActivity : ComponentActivity() {
@@ -74,7 +75,10 @@ class MainActivity : ComponentActivity() {
             LockComposeTheme {
                 val navController = rememberNavController()
                 NavHost(navController = navController, startDestination = "showAppList") {
-                    composable("showAppList") { ShowAppList() }
+                    composable("showAppList") { ShowAppList(navController) }
+                    composable("devices") {
+                        DevicesScreen()
+                    }
                 }
             }
         }

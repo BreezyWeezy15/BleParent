@@ -1,4 +1,5 @@
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
@@ -40,6 +41,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBox
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -74,6 +77,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.navigation.NavController
 import com.google.firebase.database.FirebaseDatabase
 import com.google.zxing.integration.android.IntentIntegrator
 import java.io.IOException
@@ -84,7 +88,7 @@ import java.util.regex.Pattern
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ShowAppList() {
+fun ShowAppList(navController: NavController) {
     val context = LocalContext.current
 
     val isLightTheme = !isSystemInDarkTheme()
@@ -135,6 +139,17 @@ fun ShowAppList() {
                         Icon(
                             imageVector = androidx.compose.material.icons.Icons.Default.Delete,
                             contentDescription = "Delete Apps"
+                        )
+                    }
+                    // Add a new IconButton for navigating to the DevicesScreen
+                    IconButton(
+                        onClick = {
+                            navController.navigate("devices")
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Home,
+                            contentDescription = "Devices"
                         )
                     }
                     IconButton(onClick = {
@@ -320,10 +335,35 @@ private fun connectToDevice(context: Context, device: BluetoothDevice) {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                // Show toast once the device is connected
-                Toast.makeText(context, "Device paired successfully", Toast.LENGTH_SHORT).show()
 
-                // Optionally, start discovering services
+                (context as Activity).runOnUiThread {
+                    Toast.makeText(context, "Device connected successfully", Toast.LENGTH_SHORT)
+                        .show()
+                }
+
+                // Check if the device is already bonded
+                if (device.bondState == BluetoothDevice.BOND_BONDED) {
+                    // If already bonded, show toast
+                    (context as Activity).runOnUiThread {
+                        Toast.makeText(context, "Device is already bonded", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    // If not bonded, initiate bonding
+                    val bondSuccess = device.createBond()
+                    if (bondSuccess) {
+                        // Show success message for bond creation
+                        (context as Activity).runOnUiThread {
+                            Toast.makeText(context, "Bonding initiated successfully", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        // Show failure message if bonding failed
+                        (context as Activity).runOnUiThread {
+                            Toast.makeText(context, "Failed to initiate bonding", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+
+                // Optionally, start discovering services after a successful connection
                 gatt?.discoverServices()
             }
         }
