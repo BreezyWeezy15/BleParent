@@ -28,6 +28,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -59,6 +60,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -79,8 +81,11 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.core.graphics.drawable.toBitmap
 import androidx.navigation.NavController
 import com.google.firebase.database.FirebaseDatabase
@@ -94,6 +99,7 @@ import java.util.Locale
 import java.util.UUID
 import java.util.regex.Pattern
 
+@SuppressLint("MissingPermission")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShowAppList(navController: NavController) {
@@ -107,9 +113,9 @@ fun ShowAppList(navController: NavController) {
     var expanded by remember { mutableStateOf(false) }
     var selectedInterval by remember { mutableStateOf("Select Interval") }
     val timeIntervals = listOf("1 min", "15 min", "30 min", "45 min", "60 min", "75 min", "90 min", "120 min")
-
+    val showDevicesDialog = remember { mutableStateOf(false) } // State to control device dialog
     var pinCode by remember { mutableStateOf("") }
-
+    var devicesName by remember { mutableStateOf("") }
     fun parseInterval(interval: String): Int {
         return interval.replace(" min", "").toIntOrNull() ?: 0
     }
@@ -148,15 +154,8 @@ fun ShowAppList(navController: NavController) {
                         )
                     }
                     // Add a new IconButton for navigating to the DevicesScreen
-                    IconButton(
-                        onClick = {
-                            navController.navigate("devices")
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Home,
-                            contentDescription = "Devices"
-                        )
+                    IconButton(onClick = { showDevicesDialog.value = true }) { // Show device dialog
+                        Icon(Icons.Default.Home, contentDescription = "Show Devices", tint = Color.White)
                     }
                     IconButton(onClick = {
                         val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
@@ -279,7 +278,7 @@ fun ShowAppList(navController: NavController) {
                 onClick = {
                     if (pinCode.isNotEmpty() && selectedApps.isNotEmpty() && selectedInterval != "Select Interval") {
                         val intervalInMinutes = parseInterval(selectedInterval)
-                        sendSelectedAppsToFirebase(selectedApps, intervalInMinutes, pinCode, context)
+                        sendSelectedAppsToFirebase(selectedApps, intervalInMinutes, pinCode, context,devicesName)
                     } else {
                         Toast.makeText(context, "Please fill all required fields", Toast.LENGTH_SHORT).show()
                     }
@@ -295,9 +294,22 @@ fun ShowAppList(navController: NavController) {
                     color = Color.White
                 )
             }
+
+            if (showDevicesDialog.value) {
+                PairedDevicesDialog(
+                    onDismiss = { showDevicesDialog.value = false },
+                    onDeviceClick = { device ->
+                        devicesName = device.name ?: "random"
+                        Toast.makeText(context, "Clicked on ${device.name}", Toast.LENGTH_SHORT).show()
+                        showDevicesDialog.value = false
+                    }
+                )
+            }
         }
     }
 }
+
+
 
 @SuppressLint("MissingPermission")
 fun scanDevices(context: Context,uuid : String) {
@@ -492,8 +504,94 @@ fun drawableToByteArray(drawable: Drawable): ByteArray {
     return stream.toByteArray()
 }
 
-fun sendSelectedAppsToFirebase(selectedApps: List<InstalledApp>, selectedInterval: Int, pinCode: String, context: Context) {
+@SuppressLint("MissingPermission")
+@Composable
+fun PairedDevicesDialog(
+    onDismiss: () -> Unit,
+    onDeviceClick: (BluetoothDevice) -> Unit
+) {
+    val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+    val pairedDevices = remember { mutableStateOf(bluetoothAdapter?.bondedDevices?.toList() ?: emptyList()) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Paired Devices",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                if (pairedDevices.value.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No paired devices found", style = MaterialTheme.typography.bodyLarge)
+                    }
+                } else {
+                    LazyColumn {
+                        items(pairedDevices.value) { device ->
+                            DeviceListItem(
+                                device = device,
+                                onClick = { onDeviceClick(device) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+}
+
+@SuppressLint("MissingPermission")
+@Composable
+fun DeviceListItem(
+    device: BluetoothDevice,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = device.name ?: "Unknown Device",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = device.address,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
+        }
+    }
+}
+
+fun sendSelectedAppsToFirebase(selectedApps: List<InstalledApp>, selectedInterval: Int,
+                               pinCode: String, context: Context,deviceName : String) {
     val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("Apps")
+        .child(deviceName.trim().toLowerCase(Locale.ROOT))
 
     firebaseDatabase.child("type").setValue("new data")
         .addOnSuccessListener {
