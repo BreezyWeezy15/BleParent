@@ -12,10 +12,15 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.AdaptiveIconDrawable
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.os.ParcelUuid
 import android.util.Log
 import android.widget.Toast
+import android.widget.Toast.LENGTH_LONG
+import android.widget.Toast.LENGTH_SHORT
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -80,9 +85,12 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.navigation.NavController
 import com.google.firebase.database.FirebaseDatabase
 import com.google.zxing.integration.android.IntentIntegrator
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.util.Base64
+import java.util.Locale
 import java.util.UUID
 import java.util.regex.Pattern
 
@@ -469,21 +477,59 @@ data class InstalledApp(
     val appIcon: Drawable
 )
 
-fun sendSelectedAppsToFirebase(
-    selectedApps: List<InstalledApp>,
-    interval: Int,
-    pinCode: String,
-    context: Context
-) {
-    val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("Apps")
-    for (app in selectedApps) {
-        val appData = mapOf(
-            "appName" to app.appName,
-            "packageName" to app.packageName,
-            "interval" to interval,
-            "pinCode" to pinCode
-        )
-        firebaseDatabase.child(UUID.randomUUID().toString()).setValue(appData)
+@SuppressLint("NewApi")
+fun drawableToByteArray(drawable: Drawable): ByteArray {
+    val bitmap = when (drawable) {
+        is BitmapDrawable -> drawable.bitmap
+        is AdaptiveIconDrawable -> {
+            val bitmap = Bitmap.createBitmap(
+                drawable.intrinsicWidth,
+                drawable.intrinsicHeight,
+                Bitmap.Config.ARGB_8888
+            )
+            val canvas = Canvas(bitmap)
+            drawable.setBounds(0, 0, canvas.width, canvas.height)
+            drawable.draw(canvas)
+            bitmap
+        }
+        else -> throw IllegalArgumentException("Unsupported drawable type")
     }
-    Toast.makeText(context, "Apps sent successfully", Toast.LENGTH_SHORT).show()
+
+    val stream = ByteArrayOutputStream()
+    bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+    return stream.toByteArray()
+}
+
+fun sendSelectedAppsToFirebase(selectedApps: List<InstalledApp>, selectedInterval: Int, pinCode: String, context: Context) {
+    val firebaseDatabase = FirebaseDatabase.getInstance().reference.child("Apps")
+
+    firebaseDatabase.child("type").setValue("new data")
+        .addOnSuccessListener {
+            selectedApps.forEach { app ->
+                val iconByteArray = app.appIcon?.let { drawableToByteArray(it) }
+
+                val appData = mapOf(
+                    "package_name" to app.packageName,
+                    "name" to app.appName,
+                    "interval" to selectedInterval.toString(),
+                    "pin_code" to pinCode,
+                    "icon" to iconByteArray?.let { android.util.Base64.encodeToString(it, android.util.Base64.DEFAULT) }
+                )
+
+                firebaseDatabase.child(app.appName.lowercase(Locale.ROOT)).setValue(appData)
+                    .addOnSuccessListener {
+                        Toast.makeText(context, "uploaded successfully", LENGTH_SHORT).show()
+                    }
+                    .addOnFailureListener { e ->
+                        Toast.makeText(context, "Error uploading ${app.appName}: ${e.message}", LENGTH_LONG).show()
+                    }
+
+
+            }
+        }
+        .addOnFailureListener { e ->
+            Toast.makeText(context, "Error", LENGTH_LONG).show()
+        }
+
+
 }

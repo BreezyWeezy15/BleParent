@@ -25,40 +25,15 @@ import androidx.compose.ui.text.font.FontWeight
 @SuppressLint("MissingPermission")
 @Composable
 fun DevicesScreen() {
-    val context = LocalContext.current
+
+
     val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+    val pairedDevices = remember { mutableStateOf(bluetoothAdapter.bondedDevices.toList()) }
 
-    // Ensure Bluetooth is supported and enabled
-    if (bluetoothAdapter == null) {
-        Text(
-            text = "Bluetooth is not supported on this device",
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color.Red,
-            modifier = Modifier.fillMaxSize(),
-        )
-        return
-    }
-
-    val isBluetoothEnabled = bluetoothAdapter.isEnabled
-    if (!isBluetoothEnabled) {
-        Text(
-            text = "Please turn on Bluetooth",
-            style = MaterialTheme.typography.bodyLarge,
-            color = Color.Red,
-            modifier = Modifier.fillMaxSize(),
-        )
-        return
-    }
-
-    // Remember the list of paired devices
-    var pairedDevices = remember { mutableStateOf(bluetoothAdapter.bondedDevices.toList()) }
-
-    // Manually refresh paired devices list if necessary
     LaunchedEffect(Unit) {
         pairedDevices.value = bluetoothAdapter.bondedDevices.toList()
     }
 
-    // Step 2: Display paired devices in a scrollable list
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -70,7 +45,7 @@ fun DevicesScreen() {
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
-        // Step 3: If there are no paired devices
+        Log.d("TAG","Paired Devices Size : " + pairedDevices.value)
         if (pairedDevices.value.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
