@@ -333,21 +333,26 @@ fun scanDevices(context: Context,uuid : String) {
 
 @SuppressLint("MissingPermission")
 private fun connectToDevice(context: Context, device: BluetoothDevice) {
+    var isConnected = false
+    var isBondingStarted = false
+
     val gattCallback = object : BluetoothGattCallback() {
         @SuppressLint("MissingPermission")
         override fun onConnectionStateChange(gatt: BluetoothGatt?, status: Int, newState: Int) {
-            if (newState == BluetoothProfile.STATE_CONNECTED) {
-
+            if (newState == BluetoothProfile.STATE_CONNECTED && !isConnected) {
+                // Ensure Toast is shown only once for the connection
+                isConnected = true
                 (context as Activity).runOnUiThread {
-                    Toast.makeText(context, "Device connected successfully", Toast.LENGTH_SHORT)
-                        .show()
+                    Toast.makeText(context, "Device connected successfully", Toast.LENGTH_SHORT).show()
                 }
 
                 if (device.bondState == BluetoothDevice.BOND_BONDED) {
                     context.runOnUiThread {
                         Toast.makeText(context, "Device is already bonded", Toast.LENGTH_SHORT).show()
                     }
-                } else {
+                } else if (!isBondingStarted) {
+                    // Initiate bonding only if not already started
+                    isBondingStarted = true
                     val bondSuccess = device.createBond()
                     if (bondSuccess) {
                         context.runOnUiThread {
@@ -376,6 +381,7 @@ private fun connectToDevice(context: Context, device: BluetoothDevice) {
     }
     device.connectGatt(context, false, gattCallback)
 }
+
 
 
 
