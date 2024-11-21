@@ -119,12 +119,10 @@ fun ShowAppList(navController: NavController) {
     val scanLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val intentResult = IntentIntegrator.parseActivityResult(result.resultCode, result.data)
         if (intentResult != null && intentResult.contents != null) {
-            // If QR code scan is successful
             scannedData = intentResult.contents
             Toast.makeText(context, "QR Code Scanned: $scannedData", Toast.LENGTH_SHORT).show()
             scanDevices(context,scannedData)
         } else {
-            // If scan fails or is canceled
             Toast.makeText(context, "Scan failed or canceled", Toast.LENGTH_SHORT).show()
         }
     }
@@ -167,11 +165,9 @@ fun ShowAppList(navController: NavController) {
                         } else if (!bluetoothAdapter.isEnabled) {
                             Toast.makeText(context, "Bluetooth is off. Please turn it on.", Toast.LENGTH_SHORT).show()
                         } else {
-                            // Proceed with QR code scanning if Bluetooth is on
                             val integrator = IntentIntegrator(context as android.app.Activity)
                             integrator.setOrientationLocked(false)
                             integrator.setPrompt("Scan a QR Code")
-                            // Launch the QR code scan and listen for the result using scanLauncher
                             scanLauncher.launch(integrator.createScanIntent())
                         }
                     }) {
@@ -240,11 +236,10 @@ fun ShowAppList(navController: NavController) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp)) // Space between spinner and list
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // LazyColumn for the list of apps
             LazyColumn(
-                modifier = Modifier.weight(1f) // Allow the list to take remaining space
+                modifier = Modifier.weight(1f)
             ) {
                 items(availableApps) { app ->
                     AppListItem(
@@ -320,7 +315,6 @@ fun scanDevices(context: Context,uuid : String) {
             }
         }
         override fun onScanFailed(errorCode: Int) {
-            // Handle scan failure
             Log.e("Bluetooth", "Scan failed with error code: $errorCode")
         }
     }
@@ -349,30 +343,22 @@ private fun connectToDevice(context: Context, device: BluetoothDevice) {
                         .show()
                 }
 
-                // Check if the device is already bonded
                 if (device.bondState == BluetoothDevice.BOND_BONDED) {
-                    // If already bonded, show toast
-                    (context as Activity).runOnUiThread {
+                    context.runOnUiThread {
                         Toast.makeText(context, "Device is already bonded", Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    // If not bonded, initiate bonding
                     val bondSuccess = device.createBond()
                     if (bondSuccess) {
-                        // Show success message for bond creation
-                        (context as Activity).runOnUiThread {
+                        context.runOnUiThread {
                             Toast.makeText(context, "Bonding initiated successfully", Toast.LENGTH_SHORT).show()
                         }
                     } else {
-                        // Show failure message if bonding failed
-                        (context as Activity).runOnUiThread {
+                        context.runOnUiThread {
                             Toast.makeText(context, "Failed to initiate bonding", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
-
-                // Optionally, start discovering services after a successful connection
-                gatt?.discoverServices()
             }
         }
 
